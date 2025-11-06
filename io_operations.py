@@ -196,7 +196,7 @@ def load_flowchart(scene, parent_window, file_path=None):
         if file_path is None:
             # 动态导入需要的类
             logger.debug("尝试导入FlowchartItem和ConnectionLine...")
-            from main import FlowchartItem, ConnectionLine
+            from GUI import FlowchartItem, ConnectionLine
             logger.debug("✓ 成功导入所需类")
 
             # 显示打开文件对话框
@@ -212,7 +212,7 @@ def load_flowchart(scene, parent_window, file_path=None):
                 logger.info("用户取消了文件选择")
                 return False
         else:
-            from main import FlowchartItem, ConnectionLine
+            from GUI import FlowchartItem, ConnectionLine
         logger.debug(f"选择的文件: {file_path}")
 
         # 读取JSON文件
