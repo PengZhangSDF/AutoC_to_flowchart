@@ -1090,7 +1090,7 @@ class MainWindow(QMainWindow):
 
         # ========== 可配置的提示文本（在这里修改） ==========
         # 提示信息（支持多行，粗体显示）
-        self.tip_text = "💡 提示：\n1.将C++代码放入Cfile.cpp文件中，点击「从代码导入」即可自动生成流程图\n2.使用Ctrl+滚轮缩放画布\n3.点击红色点作为连线起点，再点击另一个点作为连线终点"
+        self.tip_text = "💡 提示：\n1.点击「从代码导入」选择C/C++文件即可自动生成流程图\n2.使用Ctrl+滚轮缩放画布\n3.点击红色点作为连线起点，再点击另一个点作为连线终点"
         
         # 开源地址（支持HTML链接）
         self.repo_text = '🔗 程序免费开源地址：<a href="https://github.com/PengZhangSDF/AutoC_to_flowchart">https://github.com/PengZhangSDF/AutoC_to_flowchart</a>'
