@@ -107,5 +107,3 @@ tips:
     3.点击红色点作为连线起点，再点击另一个点作为连线终点'
   repo_url: https://github.com/PengZhangSDF/AutoC_to_flowchart
   repo_text: 🔗 程序免费开源地址：
-layout:
-  function_offset_x: 0
