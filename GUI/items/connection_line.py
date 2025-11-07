@@ -203,10 +203,14 @@ class ConnectionLine(QGraphicsPathItem):
             self._draw_up_to_down_path(path, start_point, end_point)
         elif (self.start_point_type == 'right' and self.end_point_type == 'left'):
             path.lineTo(end_point)
+        elif (self.start_point_type == 'left' and self.end_point_type == 'right'):
+            self._draw_left_to_right_path(path, start_point, end_point)
         elif (self.start_point_type == 'right' and self.end_point_type == 'right'):
             self._draw_right_to_right_path(path, start_point, end_point)
         elif (self.start_point_type == 'left' and self.end_point_type == 'left'):
             self._draw_left_to_left_path(path, start_point, end_point)
+        elif self.start_point_type == 'down' and self.end_point_type in ('left', 'right'):
+            self._draw_down_to_side_path(path, start_point, end_point)
         elif self.start_point_type == 'right' and self.end_point_type == 'up':
             self._draw_right_to_up_path(path, start_point, end_point)
         elif self.start_point_type == 'left' and self.end_point_type == 'up':
@@ -337,6 +341,15 @@ class ConnectionLine(QGraphicsPathItem):
         path.lineTo(path.currentPosition().x(), end_point.y())
         path.lineTo(end_point.x(), path.currentPosition().y())
         path.lineTo(end_point)
+
+    def _draw_left_to_right_path(self, path, start_point, end_point):
+        """left->right 直接连接"""
+        path.lineTo(end_point)
+
+    def _draw_down_to_side_path(self, path, start_point, end_point):
+        """down->left/right 先向下再水平"""
+        path.lineTo(start_point.x(), end_point.y())
+        path.lineTo(end_point.x(), end_point.y())
 
     def _draw_right_to_up_path(self, path, start_point, end_point):
         """right->up 连接路径"""

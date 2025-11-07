@@ -164,6 +164,10 @@ class FlowchartScene(QGraphicsScene):
             # 其他连接规则
             elif (start_point_type in ['left', 'right']) and end_point_type == 'up':
                 valid = True
+            elif start_point_type == 'left' and end_point_type == 'right':
+                valid = True
+            elif start_point_type == 'down' and end_point_type in ['left', 'right']:
+                valid = True
 
             print(f"\n=== 连接规则检查 ===")
             print(f"连接类型: {start_point_type} → {end_point_type}")
