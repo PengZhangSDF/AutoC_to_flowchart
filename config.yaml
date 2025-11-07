@@ -1,0 +1,109 @@
+window:
+  title: 流程图工具
+  width: 1200
+  height: 800
+  x: 100
+  y: 100
+scene:
+  origin_x: -5000
+  origin_y: -5000
+  min_width: 1000
+  min_height: 1000
+  padding: 500
+  grid_size: 20
+  background_color:
+  - 230
+  - 230
+  - 230
+  grid_color:
+  - 200
+  - 200
+  - 200
+item:
+  default_width: 125
+  default_height: 75
+  connection_point:
+    radius: 5
+    hit_radius: 10
+    z_value: 10
+  colors:
+    default:
+    - 240
+    - 240
+    - 240
+    start:
+    - 240
+    - 240
+    - 240
+    end:
+    - 240
+    - 240
+    - 240
+    input:
+    - 240
+    - 240
+    - 240
+    process:
+    - 240
+    - 240
+    - 240
+    decision:
+    - 240
+    - 240
+    - 240
+connection:
+  arrow:
+    size: 10
+  line:
+    width: 2
+    color: black
+    z_value: 5
+  path_offsets:
+    down_to_up:
+      mid_offset: 40
+    up_to_down:
+      down_offset: 30
+      horizontal_ratio: 0.7
+      mid_offset: 40
+    horizontal_loop:
+      offset: 50
+    right_to_up:
+      base_spacing: 50
+      dynamic_spacing: 30
+      extra_up_distance: 20
+    left_to_up:
+      horizontal_offset: 50
+      extra_up_distance: 20
+    decision_loop:
+      horizontal_offset: 30
+      mid_offset: 40
+view:
+  zoom:
+    in_factor: 1.25
+    out_factor: 0.8
+    min_scale: 0.2
+  drag_mode: scroll
+export:
+  default_filename: C流程图.png
+  margin: 30
+  min_width: 500
+  min_height: 400
+  background_color:
+  - 255
+  - 255
+  - 255
+text:
+  font_family: Arial
+  font_size: 12
+  text_margin: 10
+  label_font_size: 12
+tips:
+  tip_text: '💡 提示：
+
+    1.点击「从代码导入」选择C/C++文件即可自动生成流程图
+
+    2.使用Ctrl+滚轮缩放画布
+
+    3.点击红色点作为连线起点，再点击另一个点作为连线终点'
+  repo_url: https://github.com/PengZhangSDF/AutoC_to_flowchart
+  repo_text: 🔗 程序免费开源地址：
