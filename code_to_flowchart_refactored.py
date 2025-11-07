@@ -7,7 +7,7 @@
 """
 import json
 from FlowchartCreateTool import FlowchartConverter
-from logger import logger
+from logger.logger import logger
 
 
 def main():
@@ -18,8 +18,8 @@ def main():
     if not result:
         return False
     
-    input_file_path = 'output.json'
-    output_file_path = 'output_flowchart.json'
+    input_file_path = './output.json'
+    output_file_path = './output_flowchart.json'
     
     try:
         with open(input_file_path, 'r', encoding='utf-8') as f:

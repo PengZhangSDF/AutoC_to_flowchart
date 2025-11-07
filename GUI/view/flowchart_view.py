@@ -4,6 +4,7 @@
 from PyQt6.QtWidgets import QGraphicsView
 from PyQt6.QtGui import QPainter
 from PyQt6.QtCore import Qt
+from utils.config_manager import get_config
 
 
 class FlowchartView(QGraphicsView):
@@ -22,9 +23,10 @@ class FlowchartView(QGraphicsView):
     def wheelEvent(self, event):
         """滚轮事件，支持缩放"""
         if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
-            # 缩放因子
-            zoom_in_factor = 1.25
-            zoom_out_factor = 0.8
+            # 从配置文件加载缩放因子
+            zoom_in_factor = get_config('view', 'zoom', 'in_factor', default=1.25)
+            zoom_out_factor = get_config('view', 'zoom', 'out_factor', default=0.8)
+            min_scale = get_config('view', 'zoom', 'min_scale', default=0.2)
 
             # 获取鼠标位置
             mouse_pos = event.position()
@@ -40,7 +42,7 @@ class FlowchartView(QGraphicsView):
                 self.scale_factor *= zoom_in_factor
             else:
                 # 缩小
-                if self.scale_factor > 0.2:  # 最小缩放限制
+                if self.scale_factor > min_scale:
                     self.scale(zoom_out_factor, zoom_out_factor)
                     self.scale_factor *= zoom_out_factor
 

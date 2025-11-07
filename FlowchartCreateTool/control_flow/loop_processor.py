@@ -2,8 +2,8 @@
 循环结构处理模块
 负责处理for和while循环结构
 """
-from typing import Dict, Any, Tuple
-from logger import logger
+from typing import Dict, Any
+from logger.logger import logger
 from ..utils import count_statement_chain
 
 

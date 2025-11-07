@@ -32,7 +32,7 @@ class ConnectionManager:
         """
         # **安全检查1**：不能连接到自己
         if start_node_id == end_node_id:
-            from logger import logger
+            from logger.logger import logger
             logger.warning(f"[严重错误] 试图创建自连接: {start_node_id} -> {end_node_id}")
             return  # 阻止连接到自己
         

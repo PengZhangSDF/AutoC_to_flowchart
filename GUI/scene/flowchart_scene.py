@@ -1,11 +1,13 @@
 """
 流程图场景类
 """
-from PyQt6.QtWidgets import QGraphicsScene, QGraphicsItem, QMessageBox
+from PyQt6.QtWidgets import QGraphicsScene, QMessageBox
 from PyQt6.QtGui import QBrush, QColor, QPen, QTransform
 from PyQt6.QtCore import Qt
 
 from GUI.items import FlowchartItem, ConnectionPoint, ConnectionLine
+from utils.config_manager import get_config
+from utils.color_utils import to_qcolor, normalize_color
 
 
 class FlowchartScene(QGraphicsScene):
@@ -16,29 +18,34 @@ class FlowchartScene(QGraphicsScene):
         self.connections = []
         self.start_connection = None
 
-        # 初始化画布参数
-        self.scene_origin_x = -5000
-        self.scene_origin_y = -5000
-        self.min_width = 1000
-        self.min_height = 1000
+        # 从配置文件加载画布参数
+        self.scene_origin_x = get_config('scene', 'origin_x', default=-5000)
+        self.scene_origin_y = get_config('scene', 'origin_y', default=-5000)
+        self.min_width = get_config('scene', 'min_width', default=1000)
+        self.min_height = get_config('scene', 'min_height', default=1000)
         self.current_max_width = self.min_width
         self.current_max_height = self.min_height
-        self.padding = 500
+        self.padding = get_config('scene', 'padding', default=500)
         self.batch_loading = False
 
         # 设置初始画布范围
         self.setSceneRect(self.scene_origin_x, self.scene_origin_y, 
                          self.current_max_width, self.current_max_height)
 
-        # 设置背景网格
-        self.setBackgroundBrush(QBrush(QColor(230, 230, 230)))
-        self.grid_size = 20
+        # 从配置文件加载背景设置
+        bg_color_value = get_config('scene', 'background_color', default=[230, 230, 230])
+        self.background_color = to_qcolor(bg_color_value, [230, 230, 230])
+        self.setBackgroundBrush(QBrush(self.background_color))
+        self.grid_size = get_config('scene', 'grid_size', default=20)
+        grid_color_value = get_config('scene', 'grid_color', default=[200, 200, 200])
+        self.grid_color = normalize_color(grid_color_value, [200, 200, 200])
+        self.grid_qcolor = QColor(*self.grid_color)
 
     def drawBackground(self, painter, rect):
         """绘制背景网格"""
         super().drawBackground(painter, rect)
 
-        painter.setPen(QPen(QColor(200, 200, 200), 1))
+        painter.setPen(QPen(self.grid_qcolor, 1))
 
         # 绘制垂直线
         left = int(rect.left()) - (int(rect.left()) % self.grid_size)

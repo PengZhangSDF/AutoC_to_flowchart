@@ -4,7 +4,8 @@
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsEllipseItem
 from PyQt6.QtGui import QPen, QBrush, QPainterPath
 from PyQt6.QtCore import Qt, QRectF
-from logger import logger
+from logger.logger import logger
+from utils.config_manager import get_config
 
 
 class ConnectionPoint(QGraphicsEllipseItem):
@@ -13,15 +14,19 @@ class ConnectionPoint(QGraphicsEllipseItem):
     def __init__(self, parent_item, point_type):
         super().__init__(parent_item)
         self.parent_item = parent_item
-        self.point_type = point_type  # 'up', 'down', 'left', 'right'
-        self.radius = 5
-        self.hit_radius = 10  # 点击判定范围半径，比显示半径大
+        self.point_type = point_type
+        
+        # 从配置文件加载连接点参数
+        self.radius = get_config('item', 'connection_point', 'radius', default=5)
+        self.hit_radius = get_config('item', 'connection_point', 'hit_radius', default=10)
+        z_value = get_config('item', 'connection_point', 'z_value', default=10)
+        
         self.setRect(-self.radius, -self.radius, self.radius * 2, self.radius * 2)
         self.setBrush(QBrush(Qt.GlobalColor.red))
         self.setPen(QPen(Qt.GlobalColor.darkRed, 1))
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges, True)
-        self.setZValue(10)  # 确保连接点在最上层
+        self.setZValue(z_value)
 
     def shape(self):
         """重定义形状以增大点击判定范围"""

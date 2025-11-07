@@ -10,7 +10,7 @@ class Logger:
             max_log_files: 保留的最大日志文件数量，默认为20
         """
         # 配置日志目录
-        log_dir = "logs"
+        log_dir = "../logs"
         os.makedirs(log_dir, exist_ok=True)
         
         self.log_dir = log_dir

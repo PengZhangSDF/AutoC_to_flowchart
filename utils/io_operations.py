@@ -4,7 +4,7 @@
 import json
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 from PyQt6.QtCore import Qt
-from logger import logger, print_to_log as print
+from logger.logger import logger
 
 
 def save_flowchart(scene, parent_window):

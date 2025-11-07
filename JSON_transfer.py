@@ -1,7 +1,7 @@
 import json
 import sys
 import re
-from logger import logger, print_to_log as print
+from logger.logger import logger
 
 
 class CppToJsonConverter:
@@ -622,7 +622,7 @@ def main():
 
 if __name__ == "__main__":
     DEBUG = True
-    formatted_file = "./Cfile_formatted.cpp"  # 你的格式化文件路径
+    formatted_file = "Cfile_formatted.cpp"  # 你的格式化文件路径
     output_json = "./output.json"
 
     if not DEBUG and len(sys.argv) == 3:

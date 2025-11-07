@@ -1,15 +1,17 @@
 """
 主窗口类
 """
-import sys
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QLabel, QTextEdit, QFileDialog, QMessageBox, QGraphicsView)
-from PyQt6.QtGui import QAction, QImage, QPainter, QPixmap
+from PyQt6.QtGui import QAction, QImage, QPainter
 from PyQt6.QtCore import Qt, QRectF, QPointF
 
 from GUI.items import ITEM_TYPES, FlowchartItem, ConnectionPoint, ConnectionLine
 from GUI.scene import FlowchartScene
 from GUI.view import FlowchartView
+from GUI.window.settings_window import SettingsWindow
+from utils.config_manager import get_config
+from utils.color_utils import to_qcolor
 
 
 class MainWindow(QMainWindow):
@@ -17,12 +19,22 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("流程图工具")
-        self.setGeometry(100, 100, 1200, 800)
+        
+        # 从配置文件加载窗口设置
+        window_title = get_config('window', 'title', default='流程图工具')
+        window_x = get_config('window', 'x', default=100)
+        window_y = get_config('window', 'y', default=100)
+        window_width = get_config('window', 'width', default=1200)
+        window_height = get_config('window', 'height', default=800)
+        
+        self.setWindowTitle(window_title)
+        self.setGeometry(window_x, window_y, window_width, window_height)
 
-        # 可配置的提示文本
-        self.tip_text = "💡 提示：\n1.点击「从代码导入」选择C/C++文件即可自动生成流程图\n2.使用Ctrl+滚轮缩放画布\n3.点击红色点作为连线起点，再点击另一个点作为连线终点"
-        self.repo_text = '🔗 程序免费开源地址：<a href="https://github.com/PengZhangSDF/AutoC_to_flowchart">https://github.com/PengZhangSDF/AutoC_to_flowchart</a>'
+        # 从配置文件加载提示文本
+        self.tip_text = get_config('tips', 'tip_text', default='💡 提示：使用说明请查看文档')
+        repo_url = get_config('tips', 'repo_url', default='https://github.com/PengZhangSDF/AutoC_to_flowchart')
+        repo_text = get_config('tips', 'repo_text', default='🔗 程序免费开源地址：')
+        self.repo_text = f'{repo_text}<a href="{repo_url}">{repo_url}</a>'
 
         # 创建场景和视图
         self.scene = FlowchartScene()
@@ -221,6 +233,26 @@ class MainWindow(QMainWindow):
         """)
         layout.addWidget(self.repo_label)
 
+        # 添加设置按钮
+        self.settings_button = QPushButton("⚙️ 设置")
+        self.settings_button.clicked.connect(self.open_settings)
+        self.settings_button.setStyleSheet("""
+            QPushButton {
+                margin: 10px;
+                padding: 8px;
+                background-color: #607D8B;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #455A64;
+            }
+        """)
+        layout.addWidget(self.settings_button)
+
         layout.addStretch()
         main_layout.addWidget(right_toolbar, 1)
 
@@ -234,7 +266,7 @@ class MainWindow(QMainWindow):
     def save_flowchart(self):
         """保存流程图"""
         try:
-            from io_operations import save_flowchart
+            from utils.io_operations import save_flowchart
             save_flowchart(self.scene, self)
         except ImportError as e:
             print(f"导入保存功能失败: {e}")
@@ -244,7 +276,7 @@ class MainWindow(QMainWindow):
     def load_flowchart(self):
         """加载流程图"""
         try:
-            from io_operations import load_flowchart
+            from utils.io_operations import load_flowchart
             load_flowchart(self.scene, self)
         except ImportError as e:
             print(f"导入加载功能失败: {e}")
@@ -283,7 +315,11 @@ class MainWindow(QMainWindow):
             min_y = min(min_y, rect.top())
             max_y = max(max_y, rect.bottom())
 
-        margin = 30
+        # 从配置文件加载导出设置
+        margin = get_config('export', 'margin', default=30)
+        min_width = get_config('export', 'min_width', default=500)
+        min_height = get_config('export', 'min_height', default=400)
+        
         export_rect = QRectF(
             min_x - margin,
             min_y - margin,
@@ -292,8 +328,6 @@ class MainWindow(QMainWindow):
         )
 
         # 确保最小尺寸
-        min_width = 500
-        min_height = 400
         if export_rect.width() < min_width:
             center_x = export_rect.center().x()
             export_rect.setWidth(min_width)
@@ -375,7 +409,9 @@ class MainWindow(QMainWindow):
                 int(export_rect.height()),
                 QImage.Format.Format_RGB32
             )
-            image.fill(Qt.GlobalColor.white)
+            export_bg_value = get_config('export', 'background_color', default=[255, 255, 255])
+            export_bg_color = to_qcolor(export_bg_value, [255, 255, 255])
+            image.fill(export_bg_color)
 
             # 渲染临时场景
             painter = QPainter(image)
@@ -385,11 +421,12 @@ class MainWindow(QMainWindow):
             painter.end()
 
             # 显示保存文件对话框
+            default_filename = get_config('export', 'default_filename', default='C流程图.png')
             file_dialog = QFileDialog()
             file_path, _ = file_dialog.getSaveFileName(
                 self,
                 "导出为图片",
-                "C流程图.png",
+                default_filename,
                 "PNG Files (*.png);;JPEG Files (*.jpg *.jpeg);;All Files (*)"
             )
 
@@ -469,10 +506,15 @@ class MainWindow(QMainWindow):
         if not result:
             return
         try:
-            from io_operations import load_flowchart
+            from utils.io_operations import load_flowchart
             load_flowchart(self.scene, self, "output_flowchart.json")
         except ImportError as e:
             print(f"导入加载功能失败: {e}")
             import traceback
             traceback.print_exc()
+    
+    def open_settings(self):
+        """打开设置窗口"""
+        settings_window = SettingsWindow(self)
+        settings_window.exec()
 

@@ -6,8 +6,10 @@ from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem, QMenu, QApplicatio
 from PyQt6.QtGui import QPen, QBrush, QColor, QFont, QPainterPath
 from PyQt6.QtCore import Qt, QRectF
 
-from .constants import ITEM_TYPES, CONNECTION_POINTS
+from .constants import CONNECTION_POINTS
 from .connection_point import ConnectionPoint
+from utils.config_manager import get_config
+from utils.color_utils import to_qcolor
 
 
 class FlowchartItem(QGraphicsItem):
@@ -34,9 +36,12 @@ class FlowchartItem(QGraphicsItem):
             point.setAcceptHoverEvents(True)
 
         # 创建文本元素
+        font_family = get_config('text', 'font_family', default='Arial')
+        font_size = get_config('text', 'font_size', default=12)
+        
         self.text_item = QGraphicsTextItem(self)
         self.text_item.setDefaultTextColor(Qt.GlobalColor.black)
-        self.text_item.setFont(QFont("Arial", 12))
+        self.text_item.setFont(QFont(font_family, font_size))
         self.text_item.setHtml('<div align="center">' + self.text + '</div>')
         self.text_item.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
         self.text_item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
@@ -55,7 +60,10 @@ class FlowchartItem(QGraphicsItem):
     def paint(self, painter, option, widget=None):
         """绘制流程图元素"""
         painter.setPen(QPen(Qt.GlobalColor.black, 2))
-        painter.setBrush(QBrush(QColor(240, 240, 240)))
+
+        colors_config = get_config('item', 'colors', default={}) or {}
+        fill_color_value = colors_config.get(self.item_type, colors_config.get('default', [240, 240, 240]))
+        painter.setBrush(QBrush(to_qcolor(fill_color_value, [240, 240, 240])))
 
         rect = self.boundingRect()
 
@@ -120,9 +128,12 @@ class FlowchartItem(QGraphicsItem):
     def update_text_position(self):
         """更新文本位置"""
         if self.text_item:
+            text_margin = get_config('text', 'text_margin', default=10)
+            double_margin = text_margin * 2
+            
             item_rect = self.boundingRect()
-            text_width = item_rect.width() - 20
-            text_height = item_rect.height() - 20
+            text_width = item_rect.width() - double_margin
+            text_height = item_rect.height() - double_margin
 
             self.text_item.setTextWidth(text_width)
             text_rect = self.text_item.boundingRect()
@@ -132,10 +143,10 @@ class FlowchartItem(QGraphicsItem):
             text_y = (item_rect.height() - text_rect.height()) / 2
 
             # 确保文本在元素内部
-            if text_y < 10:
-                text_y = 10
-            elif text_y + text_rect.height() > item_rect.height() - 10:
-                text_y = item_rect.height() - 10 - text_rect.height()
+            if text_y < text_margin:
+                text_y = text_margin
+            elif text_y + text_rect.height() > item_rect.height() - text_margin:
+                text_y = item_rect.height() - text_margin - text_rect.height()
 
             self.text_item.setPos(text_x, text_y)
 

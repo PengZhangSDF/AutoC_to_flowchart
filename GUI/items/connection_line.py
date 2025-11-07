@@ -4,6 +4,7 @@
 from PyQt6.QtWidgets import QGraphicsTextItem, QGraphicsPathItem, QMenu
 from PyQt6.QtGui import QPen, QBrush, QFont, QPainterPath, QPolygonF, QVector2D
 from PyQt6.QtCore import Qt, QPointF
+from utils.config_manager import get_config
 
 
 class ConnectionLabelItem(QGraphicsTextItem):
@@ -28,13 +29,20 @@ class ConnectionLine(QGraphicsPathItem):
         self.end_item = end_item
         self.end_point_type = end_point_type
 
+        # 从配置文件加载连接线设置
+        line_width = get_config('connection', 'line', 'width', default=2)
+        line_z_value = get_config('connection', 'line', 'z_value', default=5)
+        
         # 创建带箭头的画笔
-        self.pen = QPen(Qt.GlobalColor.black, 2)
+        self.pen = QPen(Qt.GlobalColor.black, line_width)
         self.setPen(self.pen)
-        self.setZValue(5)
+        self.setZValue(line_z_value)
 
-        # 箭头设置
-        self.arrow_size = 10
+        # 从配置文件加载箭头设置
+        self.arrow_size = get_config('connection', 'arrow', 'size', default=10)
+        
+        # 从配置文件加载路径偏移量
+        self.offsets = get_config('connection', 'path_offsets', default={})
 
         # 标签相关
         self.label = None
@@ -66,9 +74,13 @@ class ConnectionLine(QGraphicsPathItem):
         if self.label_item:
             self.remove_label()
 
+        # 从配置文件加载标签字体设置
+        font_family = get_config('text', 'font_family', default='Arial')
+        label_font_size = get_config('text', 'label_font_size', default=12)
+
         self.label_item = ConnectionLabelItem(self.label, self)
         self.label_item.setDefaultTextColor(Qt.GlobalColor.black)
-        self.label_item.setFont(QFont("Arial", 12))
+        self.label_item.setFont(QFont(font_family, label_font_size))
         self.label_item.setZValue(10)
 
         self.scene().addItem(self.label_item)
@@ -209,6 +221,8 @@ class ConnectionLine(QGraphicsPathItem):
 
     def _draw_down_to_up_path(self, path, start_point, end_point):
         """down->up 连接路径"""
+        mid_offset = self.offsets.get('down_to_up', {}).get('mid_offset', 40)
+        
         if end_point.y() > start_point.y():
             upper_block_down_y = None
             if self.scene():
@@ -224,7 +238,7 @@ class ConnectionLine(QGraphicsPathItem):
             if upper_block_down_y is not None:
                 mid_y = (end_point.y() + upper_block_down_y) / 2
             else:
-                mid_y = end_point.y() - 40
+                mid_y = end_point.y() - mid_offset
             
             if start_point.y() < mid_y:
                 path.lineTo(start_point.x(), mid_y)
@@ -245,9 +259,12 @@ class ConnectionLine(QGraphicsPathItem):
 
     def _draw_up_to_down_path(self, path, start_point, end_point):
         """up->down 连接路径"""
-        down_offset = 30
-        horizontal_offset = self.start_item.boundingRect().width() * 0.7
-        mid_y = end_point.y() - 40
+        down_offset = self.offsets.get('up_to_down', {}).get('down_offset', 30)
+        horizontal_ratio = self.offsets.get('up_to_down', {}).get('horizontal_ratio', 0.7)
+        mid_offset = self.offsets.get('up_to_down', {}).get('mid_offset', 40)
+        
+        horizontal_offset = self.start_item.boundingRect().width() * horizontal_ratio
+        mid_y = end_point.y() - mid_offset
 
         path.lineTo(start_point.x(), start_point.y() + down_offset)
         path.lineTo(start_point.x() + horizontal_offset, path.currentPosition().y())
@@ -257,7 +274,7 @@ class ConnectionLine(QGraphicsPathItem):
 
     def _draw_right_to_right_path(self, path, start_point, end_point):
         """right->right 连接路径"""
-        horizontal_offset = 50
+        horizontal_offset = self.offsets.get('horizontal_loop', {}).get('offset', 50)
         path.lineTo(start_point.x() + horizontal_offset, start_point.y())
         path.lineTo(path.currentPosition().x(), end_point.y())
         path.lineTo(end_point.x(), path.currentPosition().y())
@@ -265,14 +282,18 @@ class ConnectionLine(QGraphicsPathItem):
 
     def _draw_left_to_left_path(self, path, start_point, end_point):
         """left->left 连接路径"""
-        horizontal_offset = -50
-        path.lineTo(start_point.x() + horizontal_offset, start_point.y())
+        horizontal_offset = self.offsets.get('horizontal_loop', {}).get('offset', 50)
+        path.lineTo(start_point.x() - horizontal_offset, start_point.y())
         path.lineTo(path.currentPosition().x(), end_point.y())
         path.lineTo(end_point.x(), path.currentPosition().y())
         path.lineTo(end_point)
 
     def _draw_right_to_up_path(self, path, start_point, end_point):
         """right->up 连接路径"""
+        base_spacing = self.offsets.get('right_to_up', {}).get('base_spacing', 50)
+        dynamic_spacing_per_conn = self.offsets.get('right_to_up', {}).get('dynamic_spacing', 30)
+        extra_up_distance = self.offsets.get('right_to_up', {}).get('extra_up_distance', 20)
+        
         if end_point.y() < start_point.y():
             rightmost_x = start_point.x()
             if self.scene():
@@ -291,10 +312,8 @@ class ConnectionLine(QGraphicsPathItem):
                         conn.start_point_type == 'right'):
                         same_target_count += 1
             
-            base_spacing = 50
-            dynamic_spacing = same_target_count * 30
+            dynamic_spacing = same_target_count * dynamic_spacing_per_conn
             horizontal_offset = (rightmost_x - start_point.x()) + base_spacing + dynamic_spacing
-            extra_up_distance = 20
 
             path.lineTo(start_point.x() + horizontal_offset, start_point.y())
             path.lineTo(path.currentPosition().x(), end_point.y() - extra_up_distance)
@@ -306,10 +325,10 @@ class ConnectionLine(QGraphicsPathItem):
 
     def _draw_left_to_up_path(self, path, start_point, end_point):
         """left->up 连接路径"""
+        horizontal_offset = self.offsets.get('left_to_up', {}).get('horizontal_offset', 50)
+        extra_up_distance = self.offsets.get('left_to_up', {}).get('extra_up_distance', 20)
+        
         if end_point.y() < start_point.y():
-            horizontal_offset = 50
-            extra_up_distance = 20
-
             path.lineTo(start_point.x() - horizontal_offset, start_point.y())
             path.lineTo(path.currentPosition().x(), end_point.y() - extra_up_distance)
             path.lineTo(end_point.x(), path.currentPosition().y())
@@ -320,10 +339,12 @@ class ConnectionLine(QGraphicsPathItem):
 
     def _draw_down_to_up_decision_path(self, path, start_point, end_point):
         """down->up decision 连接路径"""
-        offset = 30
-        mid_y = end_point.y() - 40
+        horizontal_offset = self.offsets.get('decision_loop', {}).get('horizontal_offset', 30)
+        mid_offset = self.offsets.get('decision_loop', {}).get('mid_offset', 40)
+        
+        mid_y = end_point.y() - mid_offset
 
-        path.lineTo(start_point.x() + offset, start_point.y())
+        path.lineTo(start_point.x() + horizontal_offset, start_point.y())
         path.lineTo(path.currentPosition().x(), mid_y)
         path.lineTo(end_point.x(), mid_y)
         path.lineTo(end_point)

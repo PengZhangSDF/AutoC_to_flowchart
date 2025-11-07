@@ -1,7 +1,7 @@
 import re
 import sys
 import os
-from logger import logger, print_to_log as print
+from logger.logger import logger
 
 # 尝试导入tkinter，如果失败则设置一个标志
 try:

@@ -4,7 +4,7 @@
 """
 import json
 from typing import Dict, Any, List, Tuple
-from logger import logger
+from logger.logger import logger
 
 from .node_manager import NodeManager
 from .connection_manager import ConnectionManager

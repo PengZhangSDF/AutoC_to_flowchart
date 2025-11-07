@@ -3,7 +3,7 @@ if-else及嵌套结构处理模块
 负责处理if-else条件分支及其嵌套结构的回连逻辑
 """
 from typing import Dict, Any, List, Tuple
-from logger import logger
+from logger.logger import logger
 from ..utils import find_all_nested_if_else, find_parent_block
 
 
