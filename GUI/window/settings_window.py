@@ -136,8 +136,8 @@ class SettingsWindow(QDialog):
         size_group = QGroupBox("画布尺寸")
         size_layout = QFormLayout()
         
-        self.add_int_input(size_layout, "起点 X 坐标:", 'scene', 'origin_x')
-        self.add_int_input(size_layout, "起点 Y 坐标:", 'scene', 'origin_y')
+        self.add_int_input(size_layout, "起点 X 坐标(不建议更改):", 'scene', 'origin_x')
+        self.add_int_input(size_layout, "起点 Y 坐标(不建议更改):", 'scene', 'origin_y')
         self.add_int_input(size_layout, "最小宽度:", 'scene', 'min_width')
         self.add_int_input(size_layout, "最小高度:", 'scene', 'min_height')
         self.add_int_input(size_layout, "边距留白:", 'scene', 'padding')

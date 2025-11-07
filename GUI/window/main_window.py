@@ -11,6 +11,7 @@ from GUI.scene import FlowchartScene
 from GUI.view import FlowchartView
 from GUI.window.settings_window import SettingsWindow
 from utils.config_manager import get_config, config as global_config, set_config_value
+from utils.color_utils import to_qcolor
 from logger.logger import logger
 
 
