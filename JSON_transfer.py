@@ -1,7 +1,9 @@
 import json
 import sys
 import re
+from copy import deepcopy
 from logger.logger import logger
+from utils.config_manager import get_config
 
 
 class CppToJsonConverter:
@@ -182,6 +184,21 @@ class CppToJsonConverter:
                 self.log(f"识别函数: {func_name}")
                 return func_name
         return None
+
+    def is_void_function(self, decl_unit: str) -> bool:
+        """判断函数声明是否为void返回类型"""
+        if not decl_unit:
+            return False
+
+        signature = decl_unit.strip()
+        signature = signature.rstrip('{').strip()
+        match = re.match(r'([\w\s\*\&:<>,~]+?)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(', signature)
+        if not match:
+            return False
+
+        return_type = match.group(1).strip()
+        tokens = return_type.replace('\t', ' ').split()
+        return any(token == 'void' for token in tokens)
 
     def is_declaration(self, unit):
         """判断单元是否为任意声明（变量/函数/类型声明），是则返回True。
@@ -577,6 +594,43 @@ class CppToJsonConverter:
         self.log("未找到main函数")
         return []
 
+    def create_function_header_node(self, func_name):
+        """创建函数名称节点"""
+        return {
+            "original_unit": f"function {func_name}",
+            "translated": f"{func_name} 函数",
+            "tag": "statement",
+            "children": []
+        }
+
+    def process_all_functions(self, units):
+        """提取并解析所有函数定义"""
+        functions = []
+        current_idx = 0
+        total = len(units)
+
+        while current_idx < total:
+            func_name = self.check_function_definition(units, current_idx)
+            if func_name:
+                brace_start = current_idx + 1
+                global_brace_end = self.find_matching_brace(units, brace_start)
+                if global_brace_end != -1:
+                    decl_unit = units[current_idx].strip()
+                    is_void = self.is_void_function(decl_unit)
+                    nodes = self.parse_units(units, brace_start, global_brace_end)
+                    header_node = self.create_function_header_node(func_name)
+                    nodes.insert(0, header_node)
+                    functions.append({
+                        "name": func_name,
+                        "nodes": nodes,
+                        "is_void": is_void
+                    })
+                    current_idx = global_brace_end + 1
+                    continue
+            current_idx += 1
+
+        return functions
+
     def convert(self, formatted_cpp_path, output_json_path):
         """主转换流程：跳过所有声明，只输出执行语句"""
         try:
@@ -592,11 +646,27 @@ class CppToJsonConverter:
             logger.error("未解析到有效代码单元")
             return
 
-        main_nodes = self.process_main_only(units)
+        multi_function_enabled = get_config('parser', 'multi_function', default=False)
+
+        if multi_function_enabled:
+            functions = self.process_all_functions(units)
+            main_entry = next((f for f in functions if f['name'] == 'main'), None)
+            main_nodes = deepcopy(main_entry['nodes']) if main_entry else []
+            other_functions = [
+                {"name": f['name'], "nodes": deepcopy(f['nodes'])}
+                for f in functions if f['name'] != 'main'
+            ]
+            output_payload = {
+                "main": main_nodes,
+                "functions": other_functions
+            }
+        else:
+            main_nodes = self.process_main_only(units)
+            output_payload = main_nodes
 
         try:
             with open(output_json_path, 'w', encoding='utf-8') as f:
-                json.dump(main_nodes, f, ensure_ascii=False, indent=2)
+                json.dump(output_payload, f, ensure_ascii=False, indent=2)
             logger.info(f"JSON转换完成，保存至：{output_json_path}")
         except Exception as e:
             logger.error(f"保存JSON失败：{e}")

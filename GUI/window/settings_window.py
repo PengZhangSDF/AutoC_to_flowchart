@@ -6,7 +6,7 @@ from pathlib import Path
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, 
                              QWidget, QLabel, QLineEdit, QPushButton, QMessageBox,
                              QFormLayout, QGroupBox, QScrollArea, QSpinBox, QDoubleSpinBox,
-                             QComboBox)
+                             QComboBox, QCheckBox)
 from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtCore import Qt
 
@@ -58,6 +58,8 @@ class SettingsWindow(QDialog):
         tabs.addTab(self.create_view_tab(), "👁️ 视图")
         tabs.addTab(self.create_export_tab(), "💾 导出")
         tabs.addTab(self.create_text_tab(), "📝 文本")
+        tabs.addTab(self.create_parser_tab(), "⚙️ 解析")
+        tabs.addTab(self.create_about_tab(), "ℹ️ 关于我们")
         
         layout.addWidget(tabs)
         
@@ -355,6 +357,93 @@ class SettingsWindow(QDialog):
         container_layout = QVBoxLayout(container)
         container_layout.addWidget(scroll)
         return container
+
+    def create_parser_tab(self):
+        """创建解析/函数配置页面"""
+        widget = QWidget()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(widget)
+
+        layout = QVBoxLayout(widget)
+
+        parser_group = QGroupBox("函数解析")
+        parser_layout = QFormLayout()
+        self.add_bool_input(parser_layout, "启用多函数识别:", 'parser', 'multi_function')
+        parser_group.setLayout(parser_layout)
+        layout.addWidget(parser_group)
+
+        layout_group = QGroupBox("函数布局")
+        layout_form = QFormLayout()
+        self.add_int_input(layout_form, "函数水平间距:", 'layout', 'function_offset_x')
+        layout_group.setLayout(layout_form)
+        layout.addWidget(layout_group)
+
+        layout.addStretch()
+
+        container = QWidget()
+        container_layout = QVBoxLayout(container)
+        container_layout.addWidget(scroll)
+        return container
+
+    def create_about_tab(self):
+        """创建关于我们页面"""
+        widget = QWidget()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(widget)
+
+        layout = QVBoxLayout(widget)
+
+        tips_config = self.config_data.get('tips', {}) or {}
+        tip_text = tips_config.get('tip_text', '')
+        repo_url = tips_config.get('repo_url', '')
+        repo_prefix = tips_config.get('repo_text', '')
+
+        if tip_text:
+            tip_label = QLabel(tip_text)
+            tip_label.setWordWrap(True)
+            tip_label.setStyleSheet("""
+                QLabel {
+                    margin: 12px;
+                    padding: 12px;
+                    background-color: #FFF3CD;
+                    color: #856404;
+                    border: 1px solid #FFE69C;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    font-size: 13px;
+                }
+            """)
+            layout.addWidget(tip_label)
+
+        if repo_url:
+            repo_label = QLabel(f"{repo_prefix}<a href=\"{repo_url}\">{repo_url}</a>")
+            repo_label.setWordWrap(True)
+            repo_label.setOpenExternalLinks(True)
+            repo_label.setStyleSheet("""
+                QLabel {
+                    margin: 12px;
+                    padding: 12px;
+                    background-color: #E7F3FF;
+                    color: #004085;
+                    border: 1px solid #B8DAFF;
+                    border-radius: 6px;
+                    font-size: 12px;
+                }
+                QLabel a {
+                    color: #0066CC;
+                    text-decoration: none;
+                }
+            """)
+            layout.addWidget(repo_label)
+
+        layout.addStretch()
+
+        container = QWidget()
+        container_layout = QVBoxLayout(container)
+        container_layout.addWidget(scroll)
+        return container
     
     def add_int_input(self, layout, label, *keys):
         """添加整数输入框"""
@@ -402,6 +491,20 @@ class SettingsWindow(QDialog):
         layout.addRow(label, line_edit)
         self.input_widgets[keys] = line_edit
     
+    def add_bool_input(self, layout, label, *keys):
+        """添加布尔开关"""
+        value = self.get_nested_value(self.config_data, keys)
+        checkbox = QCheckBox()
+        checkbox.setChecked(bool(value))
+
+        def on_state_changed(state):
+            checked_state = Qt.CheckState(state)
+            self.save_value(keys, checked_state == Qt.CheckState.Checked)
+
+        checkbox.stateChanged.connect(on_state_changed)
+        layout.addRow(label, checkbox)
+        self.input_widgets[keys] = checkbox
+
     def add_color_combo(self, layout, label, default_rgb, *keys):
         """添加颜色选择下拉框"""
         combo = QComboBox()
@@ -510,7 +613,13 @@ class SettingsWindow(QDialog):
         self.set_nested_value(self.config_data, keys, value)
         self.write_config_to_file()
         global_config.update_in_memory(self.config_data)
-    
+        if keys == ('parser', 'multi_function'):
+            parent = self.parent()
+            from logger.logger import logger
+            logger.info(f"[设置窗口] 保存多函数识别: {value}")
+            if parent and hasattr(parent, 'set_multi_function_enabled'):
+                parent.set_multi_function_enabled(bool(value), persist=False)
+
     def write_config_to_file(self):
         """将配置写入YAML文件"""
         try:
@@ -572,6 +681,10 @@ class SettingsWindow(QDialog):
                 widget.setValue(int(value) if value is not None else 0)
             elif isinstance(widget, QDoubleSpinBox):
                 widget.setValue(float(value) if value is not None else 0.0)
+            elif isinstance(widget, QCheckBox):
+                widget.blockSignals(True)
+                widget.setChecked(bool(value))
+                widget.blockSignals(False)
             elif isinstance(widget, QComboBox):
                 default_rgb = self.color_defaults.get(keys, [255, 255, 255])
                 widget.blockSignals(True)

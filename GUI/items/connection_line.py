@@ -219,6 +219,56 @@ class ConnectionLine(QGraphicsPathItem):
         self.setPath(path)
         self.update_label_position()
 
+    def _collect_function_items(self):
+        """收集与当前连接属于同一函数块的元素"""
+        scene = self.scene()
+        if not scene or not hasattr(scene, 'connections'):
+            return set()
+
+        visited = set()
+        queue = []
+
+        if self.start_item:
+            visited.add(self.start_item)
+            queue.append(self.start_item)
+
+        if self.end_item and self.end_item not in visited:
+            visited.add(self.end_item)
+            queue.append(self.end_item)
+
+        while queue:
+            current = queue.pop(0)
+            for conn in scene.connections:
+                if not isinstance(conn, ConnectionLine):
+                    continue
+
+                neighbors = []
+                if conn.start_item == current:
+                    neighbors.append(conn.end_item)
+                if conn.end_item == current:
+                    neighbors.append(conn.start_item)
+
+                for neighbor in neighbors:
+                    if neighbor and neighbor not in visited:
+                        visited.add(neighbor)
+                        queue.append(neighbor)
+
+        return visited
+
+    def _get_function_rightmost_x(self):
+        """获取当前函数块内最右侧元素的X坐标"""
+        items = self._collect_function_items()
+        rightmost = None
+
+        for item in items:
+            if hasattr(item, 'sceneBoundingRect'):
+                rect = item.sceneBoundingRect()
+                rect_right = rect.right()
+                if rightmost is None or rect_right > rightmost:
+                    rightmost = rect_right
+
+        return rightmost
+
     def _draw_down_to_up_path(self, path, start_point, end_point):
         """down->up 连接路径"""
         mid_offset = self.offsets.get('down_to_up', {}).get('mid_offset', 40)
@@ -296,10 +346,14 @@ class ConnectionLine(QGraphicsPathItem):
         
         if end_point.y() < start_point.y():
             rightmost_x = start_point.x()
-            if self.scene():
+            function_rightmost = self._get_function_rightmost_x()
+
+            if function_rightmost is not None:
+                rightmost_x = max(rightmost_x, function_rightmost)
+            elif self.scene():
                 for item in self.scene().items():
-                    if hasattr(item, 'item_type') and item.item_type in ['process', 'decision', 'start', 'input']:
-                        item_right_edge = item.x() + item.width
+                    if hasattr(item, 'sceneBoundingRect'):
+                        item_right_edge = item.sceneBoundingRect().right()
                         if item_right_edge > rightmost_x:
                             rightmost_x = item_right_edge
             

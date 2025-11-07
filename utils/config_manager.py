@@ -4,6 +4,7 @@
 import os
 import yaml
 from pathlib import Path
+from logger.logger import logger
 
 
 class ConfigManager:
@@ -58,6 +59,9 @@ class ConfigManager:
                 'background_color': [230, 230, 230],
                 'grid_color': [200, 200, 200]
             },
+            'parser': {
+                'multi_function': False
+            },
             'item': {
                 'default_width': 125,
                 'default_height': 75,
@@ -97,6 +101,9 @@ class ConfigManager:
                 'min_width': 500,
                 'min_height': 400,
                 'background_color': [255, 255, 255]
+            },
+            'layout': {
+                'function_offset_x': 250
             },
             'text': {
                 'font_family': 'Arial',
@@ -138,6 +145,35 @@ class ConfigManager:
         """使用提供的数据更新内存中的配置副本"""
         self._config = data
 
+    def set_value(self, keys, value):
+        """更新配置并写回文件"""
+        logger.info(f"[ConfigManager] set_value keys={keys}, value={value}")
+        if not isinstance(keys, (list, tuple)) or not keys:
+            raise ValueError("keys 应该是非空的列表或元组")
+
+        if self._config is None:
+            self._config = self._get_default_config()
+
+        current = self._config
+        for key in keys[:-1]:
+            if not isinstance(current, dict):
+                return False
+            child = current.get(key)
+            if not isinstance(child, dict):
+                current[key] = {}
+            current = current[key]
+
+        if not isinstance(current, dict):
+            return False
+        current[keys[-1]] = value
+
+        config_path = Path(__file__).resolve().parent.parent / "config.yaml"
+        with open(config_path, 'w', encoding='utf-8') as f:
+            yaml.dump(self._config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+        logger.info(f"[ConfigManager] 已写入 {config_path}, 当前parser.multi_function={self._config.get('parser', {}).get('multi_function')}")
+
+        return True
+
 
 # 创建全局配置实例
 config = ConfigManager()
@@ -147,4 +183,9 @@ config = ConfigManager()
 def get_config(*keys, default=None):
     """获取配置值的便捷函数"""
     return config.get(*keys, default=default)
+
+
+def set_config_value(keys, value):
+    """设置配置值的便捷函数"""
+    return config.set_value(keys, value)
 

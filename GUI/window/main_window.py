@@ -2,7 +2,7 @@
 主窗口类
 """
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-                             QLabel, QTextEdit, QFileDialog, QMessageBox, QGraphicsView)
+                             QLabel, QTextEdit, QFileDialog, QMessageBox, QGraphicsView, QCheckBox)
 from PyQt6.QtGui import QAction, QImage, QPainter
 from PyQt6.QtCore import Qt, QRectF, QPointF
 
@@ -10,8 +10,8 @@ from GUI.items import ITEM_TYPES, FlowchartItem, ConnectionPoint, ConnectionLine
 from GUI.scene import FlowchartScene
 from GUI.view import FlowchartView
 from GUI.window.settings_window import SettingsWindow
-from utils.config_manager import get_config
-from utils.color_utils import to_qcolor
+from utils.config_manager import get_config, config as global_config, set_config_value
+from logger.logger import logger
 
 
 class MainWindow(QMainWindow):
@@ -35,6 +35,7 @@ class MainWindow(QMainWindow):
         repo_url = get_config('tips', 'repo_url', default='https://github.com/PengZhangSDF/AutoC_to_flowchart')
         repo_text = get_config('tips', 'repo_text', default='🔗 程序免费开源地址：')
         self.repo_text = f'{repo_text}<a href="{repo_url}">{repo_url}</a>'
+        self.multi_function_enabled = get_config('parser', 'multi_function', default=False)
 
         # 创建场景和视图
         self.scene = FlowchartScene()
@@ -152,6 +153,35 @@ class MainWindow(QMainWindow):
         self.text_edit.textChanged.connect(self.on_text_changed)
         layout.addWidget(self.text_edit)
 
+        # 多函数识别快捷开关
+        self.multi_function_checkbox = QCheckBox("启用多函数识别")
+        self.multi_function_checkbox.setChecked(self.multi_function_enabled)
+        self.multi_function_checkbox.stateChanged.connect(self.on_multi_function_checkbox_changed)
+        self.multi_function_checkbox.setStyleSheet("""
+            QCheckBox {
+                margin: 12px;
+                padding: 12px;
+                background-color: #E3F2FD;
+                border: 1px solid #90CAF9;
+                border-radius: 6px;
+                font-size: 16px;
+                font-weight: bold;
+                color: #0D47A1;
+            }
+            QCheckBox::indicator {
+                width: 26px;
+                height: 26px;
+                border-radius: 4px;
+                border: 2px solid #64B5F6;
+                background-color: #FFFFFF;
+            }
+            QCheckBox::indicator:checked {
+                border: 2px solid #2E7D32;
+                background-color: #4CAF50;
+            }
+        """)
+        layout.addWidget(self.multi_function_checkbox)
+
         # 导出按钮
         export_label = QLabel("导出:")
         layout.addWidget(export_label)
@@ -212,27 +242,6 @@ class MainWindow(QMainWindow):
         """)
         layout.addWidget(self.tip_label)
 
-        # 开源地址标签
-        self.repo_label = QLabel(self.repo_text)
-        self.repo_label.setWordWrap(True)
-        self.repo_label.setOpenExternalLinks(True)
-        self.repo_label.setStyleSheet("""
-            QLabel {
-                margin: 10px;
-                padding: 10px;
-                background-color: #E7F3FF;
-                color: #004085;
-                border: 1px solid #B8DAFF;
-                border-radius: 4px;
-                font-size: 12px;
-            }
-            QLabel a {
-                color: #0066CC;
-                text-decoration: none;
-            }
-        """)
-        layout.addWidget(self.repo_label)
-
         # 添加设置按钮
         self.settings_button = QPushButton("⚙️ 设置")
         self.settings_button.clicked.connect(self.open_settings)
@@ -255,6 +264,31 @@ class MainWindow(QMainWindow):
 
         layout.addStretch()
         main_layout.addWidget(right_toolbar, 1)
+
+    def on_multi_function_checkbox_changed(self, state):
+        """多函数识别开关切换"""
+        checked_state = Qt.CheckState(state)
+        enabled = checked_state == Qt.CheckState.Checked
+        logger.info(f"[主窗口] 快捷复选框状态变化 raw={state} -> enabled={enabled}")
+        self.set_multi_function_enabled(enabled, persist=True, update_checkbox=False)
+
+    def set_multi_function_enabled(self, enabled, persist=True, update_checkbox=True):
+        enabled = bool(enabled)
+        if enabled == self.multi_function_enabled and not persist:
+            return
+        logger.info(f"[主窗口] set_multi_function_enabled -> {enabled}, persist={persist}, update_checkbox={update_checkbox}")
+        self.multi_function_enabled = enabled
+        if update_checkbox and hasattr(self, 'multi_function_checkbox'):
+            self.multi_function_checkbox.blockSignals(True)
+            self.multi_function_checkbox.setChecked(enabled)
+            self.multi_function_checkbox.blockSignals(False)
+        if persist:
+            set_config_value(('parser', 'multi_function'), enabled)
+            global_config.load_config()
+            reloaded_value = bool(get_config('parser', 'multi_function', default=enabled))
+            logger.info(f"[主窗口] 配置写入后重新加载值: {reloaded_value}")
+            if reloaded_value != self.multi_function_enabled:
+                self.set_multi_function_enabled(reloaded_value, persist=False, update_checkbox=True)
 
     def add_flowchart_item(self, item_type):
         """添加流程图元素"""
