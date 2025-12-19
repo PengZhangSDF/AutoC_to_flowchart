@@ -201,20 +201,46 @@ class FlowchartScene(QGraphicsScene):
 
     def mousePressEvent(self, event):
         """处理鼠标按下事件"""
-        item = self.itemAt(event.scenePos(), QTransform())
+        clicked_item = self.itemAt(event.scenePos(), QTransform())
+
+        # 向上查找父级，获取真正的 FlowchartItem（避免点击到文本、子元素时误判）
+        flow_item = clicked_item
+        while flow_item and not isinstance(flow_item, FlowchartItem):
+            flow_item = flow_item.parentItem()
 
         print(f"\n=== 鼠标按下事件 ===")
         print(f"点击位置: {event.scenePos()}")
-        print(f"点击的项目类型: {item.__class__.__name__ if item else 'None'}")
+        print(f"点击的项目类型: {clicked_item.__class__.__name__ if clicked_item else 'None'}")
 
-        if item:
-            print(f"项目信息: {item}")
-            if isinstance(item, ConnectionPoint):
-                print(f"连接点类型: {item.point_type}")
-            elif isinstance(item, FlowchartItem):
-                print(f"流程图元素类型: {item.item_type}")
+        # 如果点击在空白处（没有 FlowchartItem 或 ConnectionPoint），取消所有选择
+        if flow_item is None and not isinstance(clicked_item, ConnectionPoint):
+            for selected_item in self.selectedItems():
+                selected_item.setSelected(False)
+        elif flow_item:
+            # 点击在 FlowchartItem 上：如果该元素已选中且未按 Ctrl，先保存当前选择，稍后恢复
+            if flow_item.isSelected() and not (event.modifiers() & Qt.KeyboardModifier.ControlModifier):
+                self._preserve_selection = True
+                self._saved_selected_items = [i for i in self.selectedItems() if isinstance(i, FlowchartItem)]
+            else:
+                self._preserve_selection = False
+
+        if clicked_item:
+            print(f"项目信息: {clicked_item}")
+            if isinstance(clicked_item, ConnectionPoint):
+                print(f"连接点类型: {clicked_item.point_type}")
+            elif flow_item:
+                print(f"流程图元素类型: {flow_item.item_type}")
 
         super().mousePressEvent(event)
+        
+        # 如果点击的是已选中的 FlowchartItem，恢复多选状态
+        if hasattr(self, '_preserve_selection') and self._preserve_selection:
+            if hasattr(self, '_saved_selected_items'):
+                for saved_item in self._saved_selected_items:
+                    if saved_item.scene() == self:  # 确保项还在场景中
+                        saved_item.setSelected(True)
+                delattr(self, '_saved_selected_items')
+            delattr(self, '_preserve_selection')
 
     def clear(self):
         """清空场景"""

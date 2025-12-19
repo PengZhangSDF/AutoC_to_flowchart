@@ -530,9 +530,14 @@ class MainWindow(QMainWindow):
             selected_item = flowchart_items[0]
             new_text = self.text_edit.toPlainText()
 
-            selected_item.text_item.setPlainText(new_text)
-            selected_item.text = new_text
-            selected_item.update_text_position()
+            # 使用统一的 setText，保持居中与转义逻辑一致
+            if hasattr(selected_item, "setText"):
+                selected_item.setText(new_text)
+            else:
+                # 兼容性兜底：保持旧逻辑
+                selected_item.text_item.setPlainText(new_text)
+                selected_item.text = new_text
+                selected_item.update_text_position()
 
     def import_from_code(self):
         """从代码导入流程图"""

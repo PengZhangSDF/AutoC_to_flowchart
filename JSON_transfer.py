@@ -123,6 +123,55 @@ class CppToJsonConverter:
             return format_str
             
         return ""
+    
+    def parse_assignment(self, unit):
+        """解析赋值语句，提取左侧变量和右侧值
+        返回格式：("目标变量", "源值")
+        """
+        # 移除末尾的分号
+        unit = unit.rstrip(';').strip()
+        
+        # 找到第一个不在字符串中的等号
+        equal_pos = -1
+        in_string = False
+        string_quote = ''
+        
+        for idx, c in enumerate(unit):
+            if c in ('"', "'") and not self.is_escape_char(unit, idx):
+                in_string = not in_string if c == string_quote else True
+                string_quote = c if in_string else ''
+            elif c == '=' and not in_string:
+                equal_pos = idx
+                break
+        
+        if equal_pos == -1:
+            return None, None
+        
+        # 提取左侧（目标变量）和右侧（源值）
+        left_part = unit[:equal_pos].strip()
+        right_part = unit[equal_pos + 1:].strip()
+        
+        # 清理左侧：移除类型声明（如 int, float, char 等）
+        # 保留变量名和可能的数组/指针符号
+        left_cleaned = left_part
+        for type_kw in self.TYPE_KEYWORDS:
+            # 匹配类型关键字后跟空格或变量名
+            pattern = r'\b' + re.escape(type_kw) + r'\s+'
+            left_cleaned = re.sub(pattern, '', left_cleaned, count=1)
+        
+        # 移除可能的 const, static 等修饰符
+        modifiers = ['const', 'static', 'volatile', 'register']
+        for mod in modifiers:
+            pattern = r'\b' + re.escape(mod) + r'\s+'
+            left_cleaned = re.sub(pattern, '', left_cleaned, count=1)
+        
+        left_cleaned = left_cleaned.strip()
+        
+        # 如果左侧为空，使用原始左侧
+        if not left_cleaned:
+            left_cleaned = left_part
+        
+        return left_cleaned, right_part
 
     def in_string_context(self, unit):
         """判断关键字是否在字符串内"""
@@ -558,11 +607,26 @@ class CppToJsonConverter:
                     continue
 
             # 10. 赋值语句（包括带初始化的声明）
-            if '=' in unit and not self.in_string_context(unit) and not any(
-                    kw in unit for kw in ["if", "while", "for", "else", "return"]):
-                node["translated"] = "变量赋值"
+            # 检查是否包含赋值运算符（=），排除比较运算符（==, !=, <=, >=）
+            has_assignment = False
+            if '=' in unit and not self.in_string_context(unit):
+                # 检查是否是赋值运算符（单个=），而不是比较运算符
+                # 排除包含比较运算符的情况
+                if not any(op in unit for op in ['==', '!=', '<=', '>=']):
+                    # 检查是否包含控制结构关键字
+                    if not any(kw in unit for kw in ["if", "while", "for", "else", "return"]):
+                        has_assignment = True
+            
+            if has_assignment:
+                # 解析赋值语句
+                left_var, right_value = self.parse_assignment(unit)
+                if left_var and right_value:
+                    node["translated"] = f'把"{right_value}"赋值到"{left_var}"'
+                else:
+                    node["translated"] = "变量赋值"
                 node["tag"] = "statement"
                 nodes.append(node)
+                self.log(f"识别赋值语句: {unit} → {node['translated']}")
                 current_idx += 1
                 continue
 

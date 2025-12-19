@@ -1,10 +1,13 @@
 """
 流程图视图类
 """
-from PyQt6.QtWidgets import QGraphicsView
-from PyQt6.QtGui import QPainter
-from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QGraphicsView, QGraphicsRectItem
+from PyQt6.QtGui import QPainter, QPen, QBrush, QColor
+from PyQt6.QtCore import Qt, QRectF, QPointF
+from PyQt6.QtWidgets import QGraphicsItem
 from utils.config_manager import get_config
+
+from GUI.items import FlowchartItem
 
 
 class FlowchartView(QGraphicsView):
@@ -19,6 +22,12 @@ class FlowchartView(QGraphicsView):
 
         # 支持缩放
         self.scale_factor = 1.0
+        
+        # 框选相关变量
+        self.rubber_band_rect = None
+        self.rubber_band_item = None
+        self.is_rubber_banding = False
+        self.rubber_band_start = None
 
     def wheelEvent(self, event):
         """滚轮事件，支持缩放"""
@@ -51,4 +60,105 @@ class FlowchartView(QGraphicsView):
             event.accept()
         else:
             super().wheelEvent(event)
+    
+    def mousePressEvent(self, event):
+        """鼠标按下事件"""
+        # 如果按住Ctrl键且是左键，开始框选
+        if (event.button() == Qt.MouseButton.LeftButton and 
+            event.modifiers() & Qt.KeyboardModifier.ControlModifier):
+            # 检查是否点击在连接点上，如果点击在连接点上，不进行框选
+            item = self.itemAt(event.pos())
+            from GUI.items import ConnectionPoint
+            
+            # 如果点击在连接点上，交给连接点处理，不进行框选
+            if item and isinstance(item, ConnectionPoint):
+                super().mousePressEvent(event)
+                return
+            
+            # 切换到框选模式
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            self.is_rubber_banding = True
+            self.rubber_band_start = event.pos()
+            
+            # 清除之前的选择
+            scene = self.scene()
+            if scene:
+                for item in scene.selectedItems():
+                    item.setSelected(False)
+            
+            # 创建框选矩形项
+            if self.rubber_band_item:
+                self.scene().removeItem(self.rubber_band_item)
+            
+            self.rubber_band_item = QGraphicsRectItem()
+            self.rubber_band_item.setPen(QPen(QColor(100, 150, 255), 2, Qt.PenStyle.DashLine))
+            self.rubber_band_item.setBrush(QBrush(QColor(100, 150, 255, 50)))
+            self.rubber_band_item.setZValue(-1)  # 确保在底层
+            self.rubber_band_item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, False)
+            self.scene().addItem(self.rubber_band_item)
+            
+            event.accept()
+            return  # 阻止事件进一步传播，避免元素被选中
+        else:
+            # 正常模式
+            self.is_rubber_banding = False
+            if self.rubber_band_item:
+                self.scene().removeItem(self.rubber_band_item)
+                self.rubber_band_item = None
+            super().mousePressEvent(event)
+    
+    def mouseMoveEvent(self, event):
+        """鼠标移动事件"""
+        if self.is_rubber_banding and self.rubber_band_start:
+            # 更新框选矩形
+            current_pos = event.pos()
+            start_scene = self.mapToScene(self.rubber_band_start)
+            current_scene = self.mapToScene(current_pos)
+            
+            rect = QRectF(start_scene, current_scene).normalized()
+            self.rubber_band_item.setRect(rect)
+            
+            # 更新选中项
+            self._update_selection_from_rubber_band(rect)
+            
+            event.accept()
+        else:
+            super().mouseMoveEvent(event)
+    
+    def mouseReleaseEvent(self, event):
+        """鼠标释放事件"""
+        if self.is_rubber_banding:
+            self.is_rubber_banding = False
+            
+            # 清理框选矩形
+            if self.rubber_band_item:
+                self.scene().removeItem(self.rubber_band_item)
+                self.rubber_band_item = None
+            
+            # 恢复拖拽模式
+            self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+            self.rubber_band_start = None
+            event.accept()
+        else:
+            super().mouseReleaseEvent(event)
+    
+    def _update_selection_from_rubber_band(self, rect):
+        """根据框选矩形更新选中项"""
+        scene = self.scene()
+        if not scene:
+            return
+        
+        # 先清除所有选择
+        for item in scene.selectedItems():
+            if isinstance(item, FlowchartItem):
+                item.setSelected(False)
+        
+        # 获取框选矩形内的所有FlowchartItem并选中
+        for item in scene.items():
+            if isinstance(item, FlowchartItem):
+                item_rect = item.sceneBoundingRect()
+                # 检查元素是否与框选矩形有交集
+                # 使用更宽松的条件：只要元素与框选矩形有交集就选中
+                if rect.intersects(item_rect):
+                    item.setSelected(True)
 
