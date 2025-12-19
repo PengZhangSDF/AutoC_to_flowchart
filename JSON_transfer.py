@@ -123,6 +123,72 @@ class CppToJsonConverter:
             return format_str
             
         return ""
+
+    def parse_switch_cases(self, units, start_idx, end_idx):
+        """
+        解析 switch 语句体内的 case/default 分支。
+        返回一个列表，每个元素代表一个 case/default 分支节点：
+        {
+            "type": "case_block",
+            "translated": "当X时" 或 "默认",
+            "tag": "branch",
+            "children": [  # 首个子节点是 case/default 标签，后续为实际语句
+                {"translated": "case X", "tag": "statement"},
+                ...
+            ]
+        }
+        """
+        cases = []
+        idx = start_idx
+        while idx <= end_idx:
+            unit = units[idx].strip()
+            if unit.startswith("case ") or unit.startswith("default"):
+                # 提取标签
+                label = "默认" if unit.startswith("default") else unit.split("case", 1)[1].split(":", 1)[0].strip()
+                translated = "默认" if unit.startswith("default") else f"当{label}时"
+
+                # 确定分支体范围：直到下一个 case/default 或 switch 块结束
+                branch_start = idx + 1
+                # 如果下一个单元是 { ，跳过这一层括号
+                if branch_start <= end_idx and units[branch_start] == '{':
+                    brace_start = branch_start
+                    brace_end = self.find_matching_brace(units, brace_start)
+                    branch_start = brace_start + 1
+                    branch_end = brace_end - 1 if brace_end != -1 else end_idx
+                    next_idx = brace_end + 1 if brace_end != -1 else branch_end + 1
+                else:
+                    # 无显式大括号，直到下一个 case/default 或 switch 结束
+                    branch_end = end_idx
+                    next_idx = end_idx + 1
+
+                # 解析分支体
+                child_nodes = []
+                if branch_start <= branch_end:
+                    child_nodes = self.parse_units(units, branch_start, branch_end)
+
+                # 将 case/default 标签作为分支内的第一个语句节点
+                label_node = {
+                    "original_unit": unit,
+                    "translated": f"case {label}" if label != "默认" else "default",
+                    "tag": "statement",
+                    "children": []
+                }
+                child_nodes = [label_node] + child_nodes
+
+                cases.append({
+                    "original_unit": unit,
+                    "translated": translated,
+                    "tag": "branch",
+                    "type": "case_block",
+                    "children": child_nodes
+                })
+
+                idx = next_idx
+                continue
+
+            idx += 1
+
+        return cases
     
     def parse_assignment(self, unit):
         """解析赋值语句，提取左侧变量和右侧值
@@ -437,6 +503,34 @@ class CppToJsonConverter:
                     current_idx += 1
 
                 nodes.append(node)
+                continue
+
+            # 4.5 switch 语句（多分支）
+            if unit.startswith("switch") and not self.in_string_context(unit):
+                # 找到 switch 体的范围
+                brace_start = current_idx + 1 if current_idx + 1 <= end_idx and units[current_idx + 1] == '{' else -1
+                if brace_start == -1:
+                    current_idx += 1
+                    continue
+                brace_end = self.find_matching_brace(units, brace_start)
+                if brace_end == -1:
+                    current_idx += 1
+                    continue
+
+                # 提取 switch 表达式
+                expr_match = re.search(r'switch\s*\((.*)\)', unit)
+                expr = expr_match.group(1).strip() if expr_match else ""
+
+                # 解析 case/default 分支
+                case_children = self.parse_switch_cases(units, brace_start + 1, brace_end - 1)
+
+                node["translated"] = f"多分支：{expr}" if expr else "多分支"
+                node["tag"] = "branch"
+                node["children"] = case_children
+                nodes.append(node)
+
+                # 跳过整个 switch 块
+                current_idx = brace_end + 1
                 continue
 
             # 5. else语句（branch标记）

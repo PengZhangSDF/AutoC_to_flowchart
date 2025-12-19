@@ -56,7 +56,8 @@ class ConnectionLine(QGraphicsPathItem):
 
     def check_default_label(self):
         """检查是否需要自动添加默认标签"""
-        if self.start_item.item_type == 'decision':
+        # 对switch多分支的decision不自动添加默认标签
+        if self.start_item.item_type == 'decision' and not str(getattr(self.start_item, "text", "")).startswith("多分支"):
             if self.start_point_type == 'down':
                 self.label = "否"
                 self.create_label()

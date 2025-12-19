@@ -143,6 +143,150 @@ class CppCodeFormatter:
                             return f"{condition} {{ {statement}; }}"
         return line
 
+    def process_switch_statements(self, lines):
+        """处理switch语句，为每个case和default后面的语句添加大括号"""
+        processed = []
+        i = 0
+        n = len(lines)
+        
+        # case和default的正则表达式
+        case_pattern = re.compile(r'^\s*case\s+.*?:\s*')  # 匹配case语句
+        default_pattern = re.compile(r'^\s*default\s*:\s*')  # 匹配default语句
+        switch_pattern = re.compile(r'^\s*switch\s*\(.*?\)')  # 匹配switch语句
+        
+        while i < n:
+            line = lines[i]
+            stripped = line.strip()
+            
+            # 检查是否是switch语句的开始
+            if switch_pattern.match(stripped):
+                # 找到switch块的开始和结束
+                switch_start = i
+                brace_count = 0
+                switch_block_start = -1
+                switch_block_end = -1
+                
+                # 查找switch块的开始大括号
+                j = i
+                while j < n:
+                    current_line = lines[j]
+                    for char in current_line:
+                        if char == '{':
+                            if brace_count == 0:
+                                switch_block_start = j
+                            brace_count += 1
+                        elif char == '}':
+                            brace_count -= 1
+                            if brace_count == 0 and switch_block_start != -1:
+                                switch_block_end = j
+                                break
+                    if switch_block_end != -1:
+                        break
+                    j += 1
+                
+                # 如果找到了switch块，处理其中的case和default
+                if switch_block_start != -1 and switch_block_end != -1:
+                    # 添加switch语句本身和开始大括号
+                    processed.append(lines[i])
+                    if switch_block_start > i:
+                        for k in range(i + 1, switch_block_start + 1):
+                            processed.append(lines[k])
+                    i = switch_block_start + 1
+                    
+                    # 处理switch块内的case和default
+                    while i <= switch_block_end:
+                        current_line = lines[i]
+                        stripped_line = current_line.strip()
+                        
+                        # 检查是否是case或default语句
+                        is_case = case_pattern.match(stripped_line)
+                        is_default = default_pattern.match(stripped_line)
+                        
+                        if is_case or is_default:
+                            # 检查是否已经有大括号
+                            has_brace_in_line = '{' in stripped_line
+                            has_brace_next = False
+                            if i + 1 <= switch_block_end:
+                                next_stripped = lines[i + 1].strip()
+                                has_brace_next = (next_stripped == '{')
+                            
+                            if has_brace_in_line or has_brace_next:
+                                # 已经有大括号，直接添加
+                                processed.append(current_line)
+                                if has_brace_next:
+                                    processed.append(lines[i + 1])
+                                    i += 2
+                                else:
+                                    i += 1
+                                continue
+                            
+                            # 没有大括号，需要添加
+                            # 找到这个case/default的结束位置（下一个case/default）
+                            case_end = switch_block_end
+                            
+                            # 查找下一个case/default
+                            for k in range(i + 1, switch_block_end + 1):
+                                next_stripped = lines[k].strip()
+                                if case_pattern.match(next_stripped) or default_pattern.match(next_stripped):
+                                    case_end = k - 1
+                                    break
+                            
+                            # 检查是否是单行case/default（case行本身包含语句和break）
+                            colon_pos = stripped_line.find(':')
+                            after_colon = stripped_line[colon_pos + 1:].strip()
+                            
+                            # 如果case行后面有内容（不是只有冒号），可能是单行case
+                            if after_colon and 'break;' in after_colon:
+                                # 单行case，在同一行添加大括号
+                                # 格式：case 1: {cout<<"A"; break;}
+                                case_line_with_brace = current_line.rstrip()
+                                # 在冒号后添加 {，在行尾添加 }
+                                if ':' in case_line_with_brace:
+                                    parts = case_line_with_brace.split(':', 1)
+                                    if len(parts) == 2:
+                                        case_line_with_brace = parts[0] + ': {' + parts[1].strip() + ' }'
+                                processed.append(case_line_with_brace)
+                                i += 1
+                            else:
+                                # 多行case/default
+                                # 添加case/default行，后面跟{
+                                processed.append(current_line.rstrip() + ' {')
+                                i += 1
+                                
+                                # 添加case/default内的语句
+                                while i <= case_end:
+                                    processed.append(lines[i])
+                                    i += 1
+                                
+                                # 添加结束大括号
+                                # 检查最后添加的行是否已经有}
+                                if processed and processed[-1].strip() != '}':
+                                    # 如果最后一行包含break;，在同一行添加}
+                                    last_added = processed[-1].strip()
+                                    if 'break;' in last_added:
+                                        # 在同一行添加}
+                                        processed[-1] = processed[-1].rstrip() + ' }'
+                                    else:
+                                        processed.append('}')
+                            
+                            continue
+                        
+                        # 普通行，直接添加
+                        processed.append(current_line)
+                        i += 1
+                    
+                    # 添加switch块的结束大括号
+                    if i <= switch_block_end:
+                        processed.append(lines[switch_block_end])
+                    i = switch_block_end + 1
+                    continue
+            
+            # 非switch语句，直接添加
+            processed.append(line)
+            i += 1
+        
+        return processed
+
     def process_multi_line_control(self, lines):
         """处理跨多行的if/else结构和循环结构（控制语句与主体分行）"""
         processed = []
@@ -370,7 +514,7 @@ class CppCodeFormatter:
         return result
 
     def format(self, code_lines):
-        """主流程：先移除注释→再清理空格→再处理跨行控制语句→确保main函数有return 0"""
+        """主流程：先移除注释→再清理空格→再处理跨行控制语句→处理switch语句→确保main函数有return 0"""
         self.in_string = False
         # 1. 先移除所有注释行和行内注释
         no_comments_lines = self.remove_comments(code_lines)
@@ -378,8 +522,10 @@ class CppCodeFormatter:
         cleaned_lines = [self.remove_unnecessary_spaces(line) for line in no_comments_lines]
         # 3. 处理跨多行的if/else（核心修复换行场景）
         processed_lines = self.process_multi_line_control(cleaned_lines)
-        # 4. 确保main函数末尾有return 0;
-        final_lines = self.add_return_to_main(processed_lines)
+        # 4. 处理switch语句，为case和default添加大括号
+        switch_processed_lines = self.process_switch_statements(processed_lines)
+        # 5. 确保main函数末尾有return 0;
+        final_lines = self.add_return_to_main(switch_processed_lines)
         return final_lines
 
 

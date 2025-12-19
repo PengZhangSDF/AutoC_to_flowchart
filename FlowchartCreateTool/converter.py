@@ -1967,6 +1967,21 @@ class FlowchartConverter:
         if "children" not in statement or not statement["children"]:
             return has_return, next_x, next_y
         
+        # 特殊处理：switch 的 case 分支（children 中包含 type == 'case_block'）
+        try:
+            children = statement.get("children", [])
+            has_case_block = any(
+                isinstance(child, dict) and child.get("type") == "case_block"
+                for child in children
+            )
+        except Exception:
+            has_case_block = False
+        
+        if has_case_block:
+            return self._process_switch_cases_in_statement(
+                statement, current_node, x, y, context_type, parent_block, parent_loop_statement
+            )
+        
         for child in statement["children"]:
             if isinstance(child, dict):
                 logger.debug(f"处理子节点: tag={child.get('tag')}, translated={child.get('translated')}, type={child.get('type')}")
@@ -2004,6 +2019,60 @@ class FlowchartConverter:
                     has_return = has_return or child_return
                     next_y = child_y
         
+        return has_return, next_x, next_y
+
+    def _process_switch_cases_in_statement(self, statement: Dict[str, Any], current_node: Dict[str, Any],
+                                           x: float, y: float, context_type: str,
+                                           parent_block: List[Dict[str, Any]],
+                                           parent_loop_statement: Dict[str, Any] = None) -> Tuple[bool, float, float]:
+        """
+        处理 switch 的 case 分支：
+        - 多选择块（当前 decision 节点）的 down 连接到每个 case 第一个块的 up
+        - 每个 case 在同一高度，水平向右排列
+        - 每个 case 内部语句正常解析
+        - 每个 case 的最后一个模块的 down 将在 process_block 中统一连接到 switch 后的第一个块
+        """
+        has_return = False
+        children = [c for c in statement.get("children", []) if isinstance(c, dict) and c.get("type") == "case_block"]
+        if not children or not current_node:
+            return has_return, x, y + self.level_height
+        
+        # 布局参数：所有 case 的起始 y 相同，x 依次向右偏移
+        base_case_y = y + self.condition_offset_y
+        base_case_x = x + self.condition_offset_x
+        case_spacing = max(self.condition_offset_x * 2, 150)
+        
+        last_nodes = []
+        max_case_y = base_case_y
+        
+        for idx, case_block in enumerate(children):
+            case_x = base_case_x + idx * case_spacing
+            
+            # 处理单个 case 分支块
+            case_current, case_return, case_end_x, case_end_y, _ = self.process_block(
+                case_block.get("children", []),
+                case_x,
+                base_case_y,
+                current_node,
+                "down",  # 要求：switch 的 down 连接到各个 case 的 up
+                context_type=context_type,
+                parent_statement=statement,
+                parent_loop_statement=parent_loop_statement
+            )
+            
+            if case_current:
+                last_nodes.append(case_current)
+                max_case_y = max(max_case_y, case_end_y)
+            
+            has_return = has_return or case_return
+        
+        # 记录每个 case 的最后节点，供后续与 switch 后第一个块相连
+        if last_nodes:
+            statement["_switch_case_last_nodes"] = last_nodes
+        
+        # switch 之后的整体 y 位置取所有 case 中最大的 y
+        next_x = x
+        next_y = max_case_y
         return has_return, next_x, next_y
     
     def _process_if_block(self, child: Dict[str, Any], statement: Dict[str, Any],
@@ -2284,6 +2353,8 @@ class FlowchartConverter:
         current_x = x
         current_y = y
         if_block_last_node = None
+        # 待与后续第一个语句连接的 switch case 最后节点列表
+        pending_switch_case_last_nodes: List[Dict[str, Any]] = []
         
         # **关键**：如果context_type是loop且parent_statement存在，它就是循环语句
         if context_type == 'loop' and parent_statement and not parent_loop_statement:
@@ -2297,11 +2368,21 @@ class FlowchartConverter:
                 # 确定连接方向
                 use_dir = connection_dir if current_node == parent_node else "down"
                 
+                # 正常处理当前语句
                 stmt_current, stmt_return, stmt_x, stmt_y = self.process_statement(
                     statement, current_x, current_y, current_node, use_dir,
                     context_type=context_type, parent_block=block, block_index=idx,
                     parent_loop_statement=parent_loop_statement
                 )
+
+                # 如果存在挂起的 switch case 末尾节点，将它们的down连到当前语句的up
+                if pending_switch_case_last_nodes and stmt_current:
+                    for last_node in pending_switch_case_last_nodes:
+                        if last_node and last_node.get("id") != stmt_current.get("id"):
+                            self.connection_manager.add_connection(
+                                last_node["id"], "down", stmt_current["id"], "up"
+                            )
+                    pending_switch_case_last_nodes = []
                 
                 # 处理if块的最后节点
                 if statement.get("type") == "if_block" and stmt_current:
@@ -2332,6 +2413,12 @@ class FlowchartConverter:
                 current_node = stmt_current
                 has_return = has_return or stmt_return
                 current_y = stmt_y
+                
+                # 如果当前语句是 switch 且记录了各个 case 的最后节点，则将它们挂起，
+                # 等待与下一个语句的第一个节点相连
+                switch_last_nodes = statement.get("_switch_case_last_nodes")
+                if switch_last_nodes:
+                    pending_switch_case_last_nodes = switch_last_nodes
         
         return current_node, has_return, current_x, current_y, if_block_last_node
     
